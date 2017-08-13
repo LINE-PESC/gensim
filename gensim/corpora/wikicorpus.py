@@ -164,7 +164,8 @@ def remove_file(s):
     return s
 
 
-def tokenize(content):
+def tokenize(content, tokenizer=utils.tokenize, min_len=2, max_len=15, filter_starts_with='_',
+             lowercase=False, to_lower=False, lower=False, deacc=False):
     """
     Tokenize a piece of text from wikipedia. The input string `content` is assumed
     to be mark-up free (see `filter_wiki()`).
@@ -173,9 +174,15 @@ def tokenize(content):
     that 15 characters (not bytes!).
     """
     # TODO maybe ignore tokens with non-latin characters? (no chinese, arabic, russian etc.)
+    filter_starts_with = tuple(filter_starts_with)
+    content = utils.to_unicode(content, errors='replace')
+    if lowercase or to_lower or lower:
+        content = content.lower()
+    if deacc:
+        content = utils.deaccent(content)
     return [
-        utils.to_unicode(token) for token in utils.tokenize(content, lower=True, errors='ignore')
-        if 2 <= len(token) <= 15 and not token.startswith('_')
+        utils.to_unicode(token) for token in tokenizer(content) \
+        if min_len <= len(token) <= max_len and not token.startswith(filter_starts_with)
     ]
 
 
@@ -223,7 +230,7 @@ def extract_pages(f, filter_namespaces=False):
                     text = None
 
             pageid = elem.find(pageid_path).text
-            yield title, text or "", pageid     # empty page will yield None
+            yield title, text or "", pageid  # empty page will yield None
 
             # Prune the element tree, as per
             # http://www.ibm.com/developerworks/xml/library/x-hiperfparse/
@@ -241,12 +248,13 @@ def process_article(args):
     Parse a wikipedia article, returning its content as a list of tokens
     (utf8-encoded strings).
     """
-    text, lemmatize, title, pageid = args
+    text, title, pageid, lemmatize, tokenizer, lower, deacc, min_len, max_len, filter_starts_with = args
     text = filter_wiki(text)
     if lemmatize:
         result = utils.lemmatize(text)
     else:
-        result = tokenize(text)
+        result = tokenize(text, tokenizer=tokenizer, lower=lower, deacc=deacc, \
+                          min_len=min_len, max_len=max_len, filter_starts_with=filter_starts_with)
     return result, title, pageid
 
 
@@ -267,7 +275,8 @@ class WikiCorpus(TextCorpus):
 
     """
     def __init__(self, fname, processes=None, lemmatize=utils.has_pattern(), dictionary=None,
-                 filter_namespaces=('0',)):
+                 tokenizer=utils.tokenize, filter_namespaces=('0',), lower=False, deacc=False,
+                 min_len=2, max_len=15, filter_starts_with='_'):
         """
         Initialize the corpus. Unless a dictionary is provided, this scans the
         corpus once, to determine its vocabulary.
@@ -285,6 +294,12 @@ class WikiCorpus(TextCorpus):
             processes = max(1, multiprocessing.cpu_count() - 1)
         self.processes = processes
         self.lemmatize = lemmatize
+        self.tokenizer = tokenizer
+        self.lower = lower
+        self.deacc = deacc
+        self.min_len = min_len
+        self.max_len = max_len
+        self.filter_starts_with = filter_starts_with
         if dictionary is None:
             self.dictionary = Dictionary(self.get_texts())
         else:
@@ -307,7 +322,8 @@ class WikiCorpus(TextCorpus):
         articles, articles_all = 0, 0
         positions, positions_all = 0, 0
         texts = \
-            ((text, self.lemmatize, title, pageid)
+            ((text, title, pageid, self.lemmatize, self.tokenizer, \
+              self.lower, self.deacc, self.min_len, self.max_len, self.filter_starts_with)
              for title, text, pageid
              in extract_pages(bz2.BZ2File(self.fname), self.filter_namespaces))
         pool = multiprocessing.Pool(self.processes, init_to_ignore_interrupt)
