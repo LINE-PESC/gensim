@@ -61,6 +61,7 @@ data
 *.bak
 /build/
 /dist/
+**/__pycache__/
 *.prof
 *.lprof
 *.bin
