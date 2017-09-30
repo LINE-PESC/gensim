@@ -248,12 +248,14 @@ def process_article(args):
     Parse a wikipedia article, returning its content as a list of tokens
     (utf8-encoded strings).
     """
-    text, title, pageid, lemmatize, tokenizer, lower, deacc, min_len, max_len, filter_starts_with = args
-    text = filter_wiki(text)
+    text, title, pageid, lemmatize, tokenizer, lower, deacc, min_len, max_len, filter_starts_with, fields = args
+    text_content = filter_wiki(text) if (fields is None) or ('desc' in fields) else ""
+    text_content = f"{title}. {text_content}" if ('title' in fields) else text_content
+    text_content = text_content.strip()
     if lemmatize:
-        result = utils.lemmatize(text)
+        result = utils.lemmatize(text_content)
     else:
-        result = tokenize(text, tokenizer=tokenizer, lower=lower, deacc=deacc, \
+        result = tokenize(text_content, tokenizer=tokenizer, lower=lower, deacc=deacc, \
                           min_len=min_len, max_len=max_len, filter_starts_with=filter_starts_with)
     return result, title, pageid
 
@@ -276,7 +278,7 @@ class WikiCorpus(TextCorpus):
     """
     def __init__(self, fname, processes=None, lemmatize=utils.has_pattern(), dictionary=None,
                  tokenizer=utils.tokenize, filter_namespaces=('0',), lower=False, deacc=False,
-                 min_len=2, max_len=15, filter_starts_with='_'):
+                 min_len=2, max_len=15, filter_starts_with='_', fields = None):
         """
         Initialize the corpus. Unless a dictionary is provided, this scans the
         corpus once, to determine its vocabulary.
@@ -289,6 +291,7 @@ class WikiCorpus(TextCorpus):
         """
         self.fname = fname
         self.filter_namespaces = filter_namespaces
+        self.fields = fields
         self.metadata = False
         if processes is None:
             processes = max(1, multiprocessing.cpu_count() - 1)
@@ -323,7 +326,8 @@ class WikiCorpus(TextCorpus):
         positions, positions_all = 0, 0
         texts = \
             ((text, title, pageid, self.lemmatize, self.tokenizer, \
-              self.lower, self.deacc, self.min_len, self.max_len, self.filter_starts_with)
+              self.lower, self.deacc, self.min_len, self.max_len, self.filter_starts_with, \
+              self.fields)
              for title, text, pageid
              in extract_pages(bz2.BZ2File(self.fname), self.filter_namespaces))
         pool = multiprocessing.Pool(self.processes, init_to_ignore_interrupt)
