@@ -25,10 +25,12 @@ from pickle import PicklingError
 # LXML isn't faster, so let's go with the built-in solution
 from xml.etree.ElementTree import iterparse
 
+
 from gensim import utils
 # cannot import whole gensim.corpora, because that imports wikicorpus...
 from gensim.corpora.dictionary import Dictionary
 from gensim.corpora.textcorpus import TextCorpus
+
 
 logger = logging.getLogger(__name__)
 
@@ -452,7 +454,7 @@ _extract_pages = extract_pages  # for backward compatibility
 
 def process_article(
         args, tokenizer_func=tokenize, token_min_len=TOKEN_MIN_LEN,
-        token_max_len=TOKEN_MAX_LEN, lower=True,
+        token_max_len=TOKEN_MAX_LEN, lower=True, fields=None,
     ):
     """Parse a Wikipedia article, extract all tokens.
 
@@ -466,16 +468,18 @@ def process_article(
     ----------
     args : (str, str, int)
         Article text, article title, page identificator.
-    tokenizer_func : function OR list of function, optional
-            Function for tokenization (defaults is :func:`~gensim.corpora.wikicorpus.tokenize`).
-            Each function needs to have interface:
-            `tokenizer_func(text: str, token_min_len: int, token_max_len: int, lower: bool) -> list of str.`
+    tokenizer_func : function
+        Function for tokenization (defaults is :func:`~gensim.corpora.wikicorpus.tokenize`).
+        Needs to have interface:
+        tokenizer_func(text: str, token_min_len: int, token_max_len: int, lower: bool) -> list of str.
     token_min_len : int
         Minimal token length.
     token_max_len : int
         Maximal token length.
     lower : bool
-         Convert article text to lower case?
+        Convert article text to lower case?
+    fields : str
+        Names of fields to consider as textual content (space separated). 
 
     Returns
     -------
@@ -484,12 +488,10 @@ def process_article(
 
     """
     text, title, pageid = args
-    text = filter_wiki(text)
-    tokenizers = [] if (tokenizer_func is None) \
-                    else (list(tokenizer_func) if isinstance(tokenizer_func, (list, tuple)) else [tokenizer_func])
-    for tokenizer in tokenizers:
-        text = " ".join(tokenizer(text, token_min_len, token_max_len, lower))
-    result = text.split()
+    text_content = filter_wiki(text) if (fields is None) or ('text' in fields) else ""
+    text_content = f"{title} . {text_content}" if ('title' in fields) else text_content
+    text_content = text_content.strip()
+    result = tokenizer_func(text_content, token_min_len, token_max_len, lower)
     return result, title, pageid
 
 
@@ -510,9 +512,9 @@ def _process_article(args):
 
     Parameters
     ----------
-    args : [(str, bool, str, int), (function, int, int, bool)]
+    args : [(str, bool, str, int), (function, int, int, bool, str)]
         First element - same as `args` from :func:`~gensim.corpora.wikicorpus.process_article`,
-        second element is tokenizer function, token minimal length, token maximal length, lowercase flag.
+        second element is tokenizer function, token minimal length, token maximal length, lowercase flag, fields to consider as textual content.
 
     Returns
     -------
@@ -524,12 +526,12 @@ def _process_article(args):
     Should not be called explicitly. Use :func:`~gensim.corpora.wikicorpus.process_article` instead.
 
     """
-    tokenizer_func, token_min_len, token_max_len, lower = args[-1]
+    tokenizer_func, token_min_len, token_max_len, lower, fields = args[-1]
     args = args[:-1]
 
     return process_article(
         args, tokenizer_func=tokenizer_func, token_min_len=token_min_len,
-        token_max_len=token_max_len, lower=lower,
+        token_max_len=token_max_len, lower=lower, fields=fields,
     )
 
 
@@ -571,9 +573,8 @@ class WikiCorpus(TextCorpus):
         >>> MmCorpus.serialize(corpus_path, wiki)  # another 8h, creates a file in MatrixMarket format and mapping
 
     """
-
     def __init__(
-            self, fname, processes=None, lemmatize=None, dictionary=None, metadata=False,
+            self, fname, processes=None, lemmatize=None, dictionary=None, metadata=False, fields=None,
             filter_namespaces=('0',), tokenizer_func=tokenize, article_min_tokens=ARTICLE_MIN_WORDS,
             token_min_len=TOKEN_MIN_LEN, token_max_len=TOKEN_MAX_LEN, lower=True, filter_articles=None,
         ):
@@ -593,10 +594,10 @@ class WikiCorpus(TextCorpus):
             **IMPORTANT: this needs a really long time**.
         filter_namespaces : tuple of str, optional
             Namespaces to consider.
-        tokenizer_func : function OR list of function, optional
-            Function for tokenization (defaults is :func:`~gensim.corpora.wikicorpus.tokenize`).
-            Each function needs to have interface:
-            `tokenizer_func(text: str, token_min_len: int, token_max_len: int, lower: bool) -> list of str.`
+        tokenizer_func : function, optional
+            Function that will be used for tokenization. By default, use :func:`~gensim.corpora.wikicorpus.tokenize`.
+            If you inject your own tokenizer, it must conform to this interface:
+            `tokenizer_func(text: str, token_min_len: int, token_max_len: int, lower: bool) -> list of str`
         article_min_tokens : int, optional
             Minimum tokens in article. Article will be ignored if number of tokens is less.
         token_min_len : int, optional
@@ -612,6 +613,8 @@ class WikiCorpus(TextCorpus):
         metadata: bool
             Have the `get_texts()` method yield `(content_tokens, (page_id, page_title))` tuples, instead
             of just `content_tokens`.
+        fields: str
+            Names of fields to consider as textual content (space separated). Is None, only text fields are considered.
 
         Warnings
         --------
@@ -637,6 +640,7 @@ class WikiCorpus(TextCorpus):
         self.token_min_len = token_min_len
         self.token_max_len = token_max_len
         self.lower = lower
+        self.fields = fields
 
         if dictionary is None:
             self.dictionary = Dictionary(self.get_texts())
@@ -681,7 +685,7 @@ class WikiCorpus(TextCorpus):
         articles, articles_all = 0, 0
         positions, positions_all = 0, 0
 
-        tokenization_params = (self.tokenizer_func, self.token_min_len, self.token_max_len, self.lower)
+        tokenization_params = (self.tokenizer_func, self.token_min_len, self.token_max_len, self.lower, self.fields)
         texts = (
             (text, title, pageid, tokenization_params)
             for title, text, pageid
