@@ -439,7 +439,7 @@ class ParallelWordOccurrenceAccumulator(WindowedTextsAnalyzer):
             self.queue_all_texts(input_q, texts, window_size)
             interrupted = False
         except KeyboardInterrupt:
-            logger.warn("stats accumulation interrupted; <= %d documents processed", self._num_docs)
+            logger.warning("stats accumulation interrupted; <= %d documents processed", self._num_docs)
             interrupted = True
 
         accumulators = self.terminate_workers(input_q, output_q, workers, interrupted)
