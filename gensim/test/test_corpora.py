@@ -641,6 +641,7 @@ class TestWikiCorpus(TestTextCorpus):
         self.file_extension = '.xml.bz2'
         self.fname = datapath('testcorpus.' + self.file_extension.lstrip('.'))
         self.enwiki = datapath('enwiki-latest-pages-articles1.xml-p000000010p000030302-shortened.bz2')
+        self.enwikinews = datapath('enwikinews-pages-articles-multistream-282samples.xml.bz2')
 
     def test_default_preprocessing(self):
         expected = ['computer', 'human', 'interface']
@@ -761,6 +762,66 @@ class TestWikiCorpus(TestTextCorpus):
         list_tokens = next(row)
         self.assertTrue(u'Anarchism' in list_tokens)
         self.assertTrue(u'anarchism' in list_tokens)
+
+    def test_fields_none(self):
+        """
+        Don't set the parameter fields and check that body token exists, and title tokens doesn't exist.
+        """
+        corpus = self.corpus_class(self.enwikinews, processes=1)
+        row = corpus.get_texts()
+        list_tokens = next(row)
+        self.assertTrue(u'helicopter' in list_tokens)
+        self.assertTrue(u'collision' not in list_tokens)
+        self.assertTrue(u'kills' not in list_tokens)
+        self.assertTrue(u'hospital' in list_tokens)
+
+    def test_fields_only_text(self):
+        """
+        Set the parameter fields to "text" and check that body token exists, and title tokens doesn't exist.
+        """
+        corpus = self.corpus_class(self.enwikinews, processes=1, fields="text")
+        row = corpus.get_texts()
+        list_tokens = next(row)
+        self.assertTrue(u'helicopter' in list_tokens)
+        self.assertTrue(u'collision' not in list_tokens)
+        self.assertTrue(u'kills' not in list_tokens)
+        self.assertTrue(u'hospital' in list_tokens)
+
+    def test_fields_only_body(self):
+        """
+        Set the parameter fields to "body" and check that body token exists, and title tokens doesn't exist.
+        """
+        corpus = self.corpus_class(self.enwikinews, processes=1, fields="body")
+        row = corpus.get_texts()
+        list_tokens = next(row)
+        self.assertTrue(u'helicopter' in list_tokens)
+        self.assertTrue(u'collision' not in list_tokens)
+        self.assertTrue(u'kills' not in list_tokens)
+        self.assertTrue(u'hospital' in list_tokens)
+
+    def test_fields_only_title(self):
+        """
+        Set the parameter fields to "title" and check that title token exists, and body tokens doesn't exist.
+        """
+        corpus = self.corpus_class(self.enwikinews, processes=1, fields="title")
+        row = corpus.get_texts()
+        list_tokens = next(row)
+        self.assertTrue(u'helicopter' in list_tokens)
+        self.assertTrue(u'collision' in list_tokens)
+        self.assertTrue(u'kills' in list_tokens)
+        self.assertTrue(u'hospital' not in list_tokens)
+
+    def test_fields_title_text(self):
+        """
+        Set the parameter fields to ("title", "text") and check that title token exists, and body tokens exists too.
+        """
+        corpus = self.corpus_class(self.enwikinews, processes=1, fields=("title", "text"))
+        row = corpus.get_texts()
+        list_tokens = next(row)
+        self.assertTrue(u'helicopter' in list_tokens)
+        self.assertTrue(u'collision' in list_tokens)
+        self.assertTrue(u'kills' in list_tokens)
+        self.assertTrue(u'hospital' in list_tokens)
 
     def test_min_token_len_not_set(self):
         """

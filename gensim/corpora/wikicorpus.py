@@ -88,6 +88,9 @@ IGNORED_NAMESPACES = [
 ]
 """MediaWiki namespaces that ought to be ignored."""
 
+"""Fields that can be considered as textual content."""
+TEXT_OR_BODY = set(("text", "body"))
+
 
 def filter_example(elem, text, *args, **kwargs):
     """Example function for filtering arbitrary documents from wikipedia dump.
@@ -478,8 +481,9 @@ def process_article(
         Maximal token length.
     lower : bool
         Convert article text to lower case?
-    fields : str
-        Names of fields to consider as textual content (space separated). 
+    fields: str or tuple of str, optional
+        Names of fields to consider as textual content ('text' and/or 'title').
+        If None, only text fields are considered.
 
     Returns
     -------
@@ -487,8 +491,10 @@ def process_article(
         List of tokens from article, title and page id.
 
     """
+    fields = tuple(fields.split()) if isinstance(fields, str) else fields
+    fields = set(fields) if fields else None
     text, title, pageid = args
-    text_content = filter_wiki(text) if (fields is None) or ('text' in fields) else ""
+    text_content = filter_wiki(text) if (fields is None) or (fields.intersection(TEXT_OR_BODY)) else ""
     text_content = f"{title} . {text_content}" if ('title' in fields) else text_content
     text_content = text_content.strip()
     result = tokenizer_func(text_content, token_min_len, token_max_len, lower)
@@ -605,7 +611,7 @@ class WikiCorpus(TextCorpus):
         token_max_len : int, optional
             Maximal token length.
         lower : bool, optional
-             If True - convert all text to lower case.
+            If True - convert all text to lower case.
         filter_articles: callable or None, optional
             If set, each XML article element will be passed to this callable before being processed. Only articles
             where the callable returns an XML element are processed, returning None allows filtering out
@@ -613,8 +619,9 @@ class WikiCorpus(TextCorpus):
         metadata: bool
             Have the `get_texts()` method yield `(content_tokens, (page_id, page_title))` tuples, instead
             of just `content_tokens`.
-        fields: str
-            Names of fields to consider as textual content (space separated). Is None, only text fields are considered.
+        fields: str or tuple of str, optional
+            Names of fields to consider as textual content ('text' and/or 'title').
+            If None, only text fields are considered.
 
         Warnings
         --------
