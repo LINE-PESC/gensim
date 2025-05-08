@@ -520,7 +520,8 @@ def _process_article(args):
     ----------
     args : [(str, bool, str, int), (function, int, int, bool, str)]
         First element - same as `args` from :func:`~gensim.corpora.wikicorpus.process_article`,
-        second element is tokenizer function, token minimal length, token maximal length, lowercase flag, fields to consider as textual content.
+        second element is tokenizer function, token minimal length, token maximal length, lowercase flag,
+        fields to consider as textual content.
 
     Returns
     -------
