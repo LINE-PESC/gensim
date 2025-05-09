@@ -491,13 +491,15 @@ def process_article(
         List of tokens from article, title and page id.
 
     """
-    fields = tuple(fields.split()) if isinstance(fields, str) else fields
-    fields = set(fields) if fields else None
+    if fields:
+        fields = set(tuple(fields.strip().split()) if isinstance(fields, str) else fields)
+    else:
+        fields = set()
     text, title, pageid = args
-    text_content = filter_wiki(text) if (fields is None) or (fields.intersection(TEXT_OR_BODY)) else ""
-    text_content = f"{title} . {text_content}" if ('title' in fields) else text_content
-    text_content = text_content.strip()
-    result = tokenizer_func(text_content, token_min_len, token_max_len, lower)
+    text_content = filter_wiki(text) if (not fields) or (fields.intersection(TEXT_OR_BODY)) else ""
+    if 'title' in fields:
+        text_content = f"{title.strip()}\n{text_content}"
+    result = tokenizer_func(text_content.strip(), token_min_len, token_max_len, lower)
     return result, title, pageid
 
 
