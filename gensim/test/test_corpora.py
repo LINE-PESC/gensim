@@ -768,10 +768,8 @@ class TestWikiCorpus(TestTextCorpus):
         """
         Set the parameter fields to "title" and check that title token exists, and body tokens doesn't exist.
         """
-        corpus = self.corpus_class(self.enwikinews, processes=1, fields="title")
+        corpus = self.corpus_class(self.enwikinews, processes=1, fields="title", article_min_tokens = 5)
         row = corpus.get_texts()
-        if isinstance(row, list):
-            row = iter(row)
         list_tokens = next(row)
         self.assertTrue(u'helicopter' in list_tokens)
         self.assertTrue(u'collision' in list_tokens)
