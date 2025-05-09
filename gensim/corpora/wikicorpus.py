@@ -491,10 +491,11 @@ def process_article(
         List of tokens from article, title and page id.
 
     """
-    if fields:
-        fields = set(tuple(fields.strip().split()) if isinstance(fields, str) else fields)
+    if fields is None:
+        fields = tuple()
     else:
-        fields = set()
+        fields = tuple(fields.strip().split()) if isinstance(fields, str) else fields
+    fields = set(fields)
     text, title, pageid = args
     text_content = filter_wiki(text) if (not fields) or (fields.intersection(TEXT_OR_BODY)) else ""
     if 'title' in fields:
