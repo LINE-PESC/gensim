@@ -963,7 +963,7 @@ class Word2Vec(utils.SaveLoad):
 
     def train(
             self, corpus_iterable=None, corpus_file=None, total_examples=None, total_words=None,
-            epochs=None, start_alpha=None, end_alpha=None, word_count=0,
+            epochs=None, initial_epoch=0, start_alpha=None, end_alpha=None, word_count=0,
             queue_factor=2, report_delay=1.0, compute_loss=False, callbacks=(),
             **kwargs,
         ):
@@ -1001,7 +1001,11 @@ class Word2Vec(utils.SaveLoad):
         total_words : int
             Count of raw words in sentences.
         epochs : int
-            Number of iterations (epochs) over the corpus.
+            Number of iterations (epochs) over the corpus. Note that in conjunction with `initial_epoch`, `epochs` is to
+            be understood as "final epoch". The model is not trained for a number of iterations given by epochs, but
+            merely until the epoch of index `epochs` is reached.
+        initial_epoch : int
+            Epoch at which to start training (useful for resuming a previous training run).
         start_alpha : float, optional
             Initial learning rate. If supplied, replaces the starting `alpha` from the constructor,
             for this one call to`train()`.
@@ -1042,7 +1046,8 @@ class Word2Vec(utils.SaveLoad):
         self.min_alpha = end_alpha or self.min_alpha
         self.epochs = epochs
 
-        self._check_training_sanity(epochs=epochs, total_examples=total_examples, total_words=total_words)
+        self._check_training_sanity(epochs=epochs, initial_epoch=initial_epoch,
+                                    total_examples=total_examples, total_words=total_words)
         self._check_corpus_sanity(corpus_iterable=corpus_iterable, corpus_file=corpus_file, passes=epochs)
 
         self.add_lifecycle_event(
@@ -1065,7 +1070,7 @@ class Word2Vec(utils.SaveLoad):
         start = default_timer() - 0.00001
         job_tally = 0
 
-        for cur_epoch in range(self.epochs):
+        for cur_epoch in range(initial_epoch, self.epochs):
             for callback in callbacks:
                 callback.on_epoch_begin(self)
 
@@ -1514,13 +1519,15 @@ class Word2Vec(utils.SaveLoad):
                     f"Please decompress {corpus_file} or use `corpus_iterable` instead."
                 )
 
-    def _check_training_sanity(self, epochs=0, total_examples=None, total_words=None, **kwargs):
+    def _check_training_sanity(self, epochs=0, initial_epoch=0, total_examples=None, total_words=None, **kwargs):
         """Checks whether the training parameters make sense.
 
         Parameters
         ----------
         epochs : int
             Number of training epochs. A positive integer.
+        initial_epoch : int
+            First epoch index. A non-negative integer, less than `epochs`.
         total_examples : int, optional
             Number of documents in the corpus. Either `total_examples` or `total_words` **must** be supplied.
         total_words : int, optional
@@ -1564,6 +1571,10 @@ class Word2Vec(utils.SaveLoad):
             )
         if epochs is None or epochs <= 0:
             raise ValueError("You must specify an explicit epochs count. The usual value is epochs=model.epochs.")
+        if initial_epoch is None or initial_epoch < 0 or initial_epoch >= epochs:
+            raise ValueError(
+                "You must specify an non-negative integer to initial_epoch, "
+                "and the value must be less than epochs count (default is 0).")
 
     def _log_progress(
             self, job_queue, progress_queue, cur_epoch, example_count, total_examples,
@@ -1607,14 +1618,14 @@ class Word2Vec(utils.SaveLoad):
             # examples-based progress %
             logger.info(
                 "EPOCH %i - PROGRESS: at %.2f%% examples, %.0f words/s, in_qsize %i, out_qsize %i",
-                cur_epoch, 100.0 * example_count / total_examples, trained_word_count / elapsed,
+                cur_epoch + 1, 100.0 * example_count / total_examples, trained_word_count / elapsed,
                 -1 if job_queue is None else utils.qsize(job_queue), utils.qsize(progress_queue)
             )
         else:
             # words-based progress %
             logger.info(
                 "EPOCH %i - PROGRESS: at %.2f%% words, %.0f words/s, in_qsize %i, out_qsize %i",
-                cur_epoch, 100.0 * raw_word_count / total_words, trained_word_count / elapsed,
+                cur_epoch + 1, 100.0 * raw_word_count / total_words, trained_word_count / elapsed,
                 -1 if job_queue is None else utils.qsize(job_queue), utils.qsize(progress_queue)
             )
 
@@ -1651,7 +1662,7 @@ class Word2Vec(utils.SaveLoad):
         """
         logger.info(
             "EPOCH %i: training on %i raw words (%i effective words) took %.1fs, %.0f effective words/s",
-            cur_epoch, raw_word_count, trained_word_count, elapsed, trained_word_count / elapsed,
+            cur_epoch + 1, raw_word_count, trained_word_count, elapsed, trained_word_count / elapsed,
         )
 
         # don't warn if training in file-based mode, because it's expected behavior
@@ -1661,13 +1672,13 @@ class Word2Vec(utils.SaveLoad):
         # check that the input corpus hasn't changed during iteration
         if total_examples and total_examples != example_count:
             logger.warning(
-                "EPOCH %i: supplied example count (%i) did not equal expected count (%i)", cur_epoch,
-                example_count, total_examples
+                "EPOCH %i: supplied example count (%i) did not equal expected count (%i)",
+                cur_epoch + 1, example_count, total_examples
             )
         if total_words and total_words != raw_word_count:
             logger.warning(
-                "EPOCH %i: supplied raw word count (%i) did not equal expected count (%i)", cur_epoch,
-                raw_word_count, total_words
+                "EPOCH %i: supplied raw word count (%i) did not equal expected count (%i)",
+                cur_epoch + 1, raw_word_count, total_words
             )
 
     def _log_train_end(self, raw_word_count, trained_word_count, total_elapsed, job_tally):
